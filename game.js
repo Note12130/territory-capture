@@ -149,7 +149,6 @@ let elGameOverCaptured, elLevelClearCaptured;
 let elSceneClearTitle, elSceneClearSubtitle;
 let btnRestart, btnNextScene, btnReplayStory;
 let btnMobilePause, btnMobileRestart;
-let dpadBtns = {};
 
 // Stage Select Elements
 let elStageSelectScreen, elStoryCardsGrid, btnBackToSelect;
@@ -478,75 +477,77 @@ function handleKeyDown(e) {
 }
 
 function initTouchControls() {
-  // 1. Virtual D-Pad buttons
-  const dpadConfigs = [
-    { id: 'dpadUp', dx: 0, dy: -1 },
-    { id: 'dpadDown', dx: 0, dy: 1 },
-    { id: 'dpadLeft', dx: -1, dy: 0 },
-    { id: 'dpadRight', dx: 1, dy: 0 }
-  ];
-
-  dpadConfigs.forEach(({ id, dx, dy }) => {
-    const btn = document.getElementById(id);
-    if (!btn) return;
-    dpadBtns[id] = btn;
-
-    const trigger = (e) => {
-      e.preventDefault();
-      btn.classList.add('active');
-      setPlayerDirection(dx, dy);
-    };
-
-    const release = (e) => {
-      e.preventDefault();
-      btn.classList.remove('active');
-    };
-
-    btn.addEventListener('touchstart', trigger, { passive: false });
-    btn.addEventListener('touchend', release, { passive: false });
-    btn.addEventListener('touchcancel', release, { passive: false });
-    btn.addEventListener('mousedown', trigger);
-    btn.addEventListener('mouseup', release);
-    btn.addEventListener('mouseleave', release);
-  });
-
-  // 2. Swipe Gesture Detection directly on Canvas
+  // Fluid Swipe & Drag Steering directly on Canvas
+  let isDragging = false;
   let touchStartX = 0;
   let touchStartY = 0;
-  const minSwipeDist = 18; // pixels
+  const minSwipeDist = 14; // pixels sensitivity threshold
 
+  function handlePointerStart(clientX, clientY) {
+    isDragging = true;
+    touchStartX = clientX;
+    touchStartY = clientY;
+  }
+
+  function handlePointerMove(clientX, clientY) {
+    if (!isDragging) return;
+    const deltaX = clientX - touchStartX;
+    const deltaY = clientY - touchStartY;
+    const absX = Math.abs(deltaX);
+    const absY = Math.abs(deltaY);
+
+    if (Math.max(absX, absY) >= minSwipeDist) {
+      if (absX > absY) {
+        setPlayerDirection(deltaX > 0 ? 1 : -1, 0);
+      } else {
+        setPlayerDirection(0, deltaY > 0 ? 1 : -1);
+      }
+      // Re-anchor start point to current position for fluid continuous steering
+      touchStartX = clientX;
+      touchStartY = clientY;
+    }
+  }
+
+  function handlePointerEnd() {
+    isDragging = false;
+  }
+
+  // 1. Touch Events on Canvas
   canvas.addEventListener('touchstart', (e) => {
     if (e.touches.length > 0) {
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
+      handlePointerStart(e.touches[0].clientX, e.touches[0].clientY);
     }
   }, { passive: true });
 
   canvas.addEventListener('touchmove', (e) => {
     // Prevent mobile pull-to-refresh or page bouncing
     e.preventDefault();
+    if (e.touches.length > 0) {
+      handlePointerMove(e.touches[0].clientX, e.touches[0].clientY);
+    }
   }, { passive: false });
 
   canvas.addEventListener('touchend', (e) => {
     if (e.changedTouches.length > 0) {
-      const touchEndX = e.changedTouches[0].clientX;
-      const touchEndY = e.changedTouches[0].clientY;
-      const deltaX = touchEndX - touchStartX;
-      const deltaY = touchEndY - touchStartY;
-      const absX = Math.abs(deltaX);
-      const absY = Math.abs(deltaY);
-
-      if (Math.max(absX, absY) >= minSwipeDist) {
-        if (absX > absY) {
-          // Horizontal swipe
-          setPlayerDirection(deltaX > 0 ? 1 : -1, 0);
-        } else {
-          // Vertical swipe
-          setPlayerDirection(0, deltaY > 0 ? 1 : -1);
-        }
-      }
+      handlePointerMove(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
     }
+    handlePointerEnd();
   }, { passive: true });
+
+  canvas.addEventListener('touchcancel', handlePointerEnd, { passive: true });
+
+  // 2. Mouse Drag Fallback on Canvas
+  canvas.addEventListener('mousedown', (e) => {
+    handlePointerStart(e.clientX, e.clientY);
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (isDragging) {
+      handlePointerMove(e.clientX, e.clientY);
+    }
+  });
+
+  window.addEventListener('mouseup', handlePointerEnd);
 }
 
 function togglePause() {

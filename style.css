@@ -70,12 +70,13 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   width: 100vw;
-  height: 100vh;
-  padding: 4px 2px;
-  gap: 3px;
+  height: 100dvh;
+  padding: 6px 4px 6px 4px;
+  gap: 4px;
   z-index: 1;
+  overflow: hidden;
 }
 
 /* ==========================================
@@ -85,8 +86,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  width: 95vw;
-  max-width: min(95vw, calc((100vh - 165px) * 9 / 16));
+  width: 96vw;
+  max-width: min(96vw, calc((100dvh - 80px) * 9 / 16));
   padding: 8px 12px;
   background: linear-gradient(180deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%);
   backdrop-filter: blur(16px);
@@ -307,10 +308,12 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 95vw;
-  max-width: min(95vw, calc((100vh - 165px) * 9 / 16));
+  width: 96vw;
+  max-width: min(96vw, calc((100dvh - 80px) * 9 / 16));
   aspect-ratio: 9 / 16;
   flex-shrink: 0;
+  margin-top: auto; /* Shifts picture down to replace the pad's former position */
+  margin-bottom: 2px;
   z-index: 5;
 }
 
@@ -374,128 +377,16 @@ body {
   border-bottom-right-radius: 10px;
 }
 
-/* ==========================================
-   VIRTUAL D-PAD (Console Controller Grade)
-   ========================================== */
-.virtual-dpad {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-  margin-top: 2px;
-  z-index: 10;
-}
-
-.dpad-housing {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: radial-gradient(circle at 50% 50%, #1e293b 0%, #0f172a 70%, #080d1a 100%);
-  border: 2px solid #334155;
-  border-radius: 50%;
-  padding: 6px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.8), inset 0 2px 4px rgba(255, 255, 255, 0.1), inset 0 -3px 6px rgba(0, 0, 0, 0.8);
-}
-
-.dpad-row {
-  display: flex;
-  justify-content: center;
-}
-
-.dpad-middle {
-  align-items: center;
-}
-
-.dpad-btn {
-  width: 58px;
-  height: 50px;
-  background: linear-gradient(180deg, #334155 0%, #1e293b 60%, #141f33 100%);
-  border: 1px solid #475569;
-  border-bottom: 2px solid #0f172a;
-  color: #e2e8f0;
-  font-size: 18px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  transition: transform 0.05s ease, background 0.08s ease, box-shadow 0.08s ease;
-  box-shadow: 0 3px 5px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
-}
-
-.arrow-glyph {
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
-  transition: transform 0.08s ease;
-}
-
-.dpad-up {
-  border-radius: 14px 14px 0 0;
-  border-bottom: none;
-}
-
-.dpad-down {
-  border-radius: 0 0 14px 14px;
-  border-top: none;
-}
-
-.dpad-left {
-  border-radius: 14px 0 0 14px;
-  border-right: none;
-}
-
-.dpad-right {
-  border-radius: 0 14px 14px 0;
-  border-left: none;
-}
-
-.dpad-center {
-  width: 44px;
-  height: 50px;
-  background: #090e1a;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border: 1px solid #1e293b;
-}
-
-.dpad-thumb-rest {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: radial-gradient(circle, #1e293b 0%, #090e1a 80%);
-  border: 1px solid #334155;
-  box-shadow: inset 0 1px 3px rgba(0,0,0,0.8);
-}
-
-.dpad-btn:active, .dpad-btn.active {
-  background: linear-gradient(180deg, #0284c7 0%, #0369a1 100%);
-  border-color: #38bdf8;
-  color: #ffffff;
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.7), 0 0 14px rgba(56, 189, 248, 0.6);
-  transform: scale(0.95);
-}
-
-.dpad-btn:active .arrow-glyph, .dpad-btn.active .arrow-glyph {
-  transform: scale(1.15);
-  filter: drop-shadow(0 0 6px #ffffff);
-}
-
-/* Footer Controls Info */
+/* Footer Controls Info (Compact) */
 .controls-hint {
   display: flex;
-  gap: 16px;
-  font-size: 12px;
+  gap: 12px;
+  font-size: 11px;
   color: #64748b;
   flex-wrap: wrap;
   justify-content: center;
+  flex-shrink: 0;
+  margin-bottom: 2px;
 }
 
 .controls-hint strong {
@@ -935,12 +826,6 @@ body {
 /* ==========================================
    RESPONSIVE & MOBILE POLISH
    ========================================== */
-@media (hover: hover) and (pointer: fine) and (min-height: 750px) {
-  .virtual-dpad {
-    opacity: 0.9;
-  }
-}
-
 @media (max-width: 480px) {
   .controls-hint {
     display: none;
@@ -963,13 +848,8 @@ body {
   }
 
   .canvas-container {
-    height: 78vh;
+    height: 82vh;
     max-width: none;
-  }
-
-  .virtual-dpad {
-    transform: scale(0.85);
-    margin: 0;
   }
 
   .controls-hint {
