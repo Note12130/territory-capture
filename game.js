@@ -288,8 +288,12 @@ function fitCanvasLayout() {
     targetW = targetH * (9 / 16);
   }
 
-  frame.style.width = `${Math.floor(targetW)}px`;
-  frame.style.height = `${Math.floor(targetH)}px`;
+  // Deduct 2px safety padding to prevent sub-pixel rounding overflow
+  targetW = Math.max(10, Math.floor(targetW) - 2);
+  targetH = Math.max(10, Math.floor(targetH) - 2);
+
+  frame.style.width = `${targetW}px`;
+  frame.style.height = `${targetH}px`;
 }
 
 function resetGame() {
