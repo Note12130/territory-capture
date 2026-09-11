@@ -49,6 +49,19 @@ const STORIES = [
       { stage: 3, title: 'ฉากที่ 3', imageSrc: 'assets/scene/2/3.jpeg' },
       { stage: 4, title: 'ฉากที่ 4', imageSrc: 'assets/scene/2/4.jpeg' }
     ]
+  },
+  {
+    id: 3,
+    folder: '3',
+    title: 'เรื่องราวที่ 3',
+    description: '4 ฉากการผจญภัย',
+    cover: 'assets/scene/3/1.jpeg',
+    scenes: [
+      { stage: 1, title: 'ฉากที่ 1', imageSrc: 'assets/scene/3/1.jpeg' },
+      { stage: 2, title: 'ฉากที่ 2', imageSrc: 'assets/scene/3/2.jpeg' },
+      { stage: 3, title: 'ฉากที่ 3', imageSrc: 'assets/scene/3/3.jpeg' },
+      { stage: 4, title: 'ฉากที่ 4', imageSrc: 'assets/scene/3/4.jpeg' }
+    ]
   }
 ];
 
@@ -233,6 +246,17 @@ function initGame() {
   // Setup Mobile Touch Controls
   initTouchControls();
 
+  // Responsive Auto-Layout Engine: Fit 9:16 Canvas perfectly in available viewport space
+  fitCanvasLayout();
+  window.addEventListener('resize', fitCanvasLayout);
+  window.addEventListener('orientationchange', fitCanvasLayout);
+  if (window.ResizeObserver) {
+    const container = document.querySelector('.canvas-container');
+    if (container) {
+      new ResizeObserver(() => fitCanvasLayout()).observe(container);
+    }
+  }
+
   // Initialize UI text
   elTargetPercent.textContent = `${levelConfig.targetPercent}%`;
 
@@ -244,6 +268,28 @@ function initGame() {
   // Start game loop
   lastTimestamp = performance.now();
   requestAnimationFrame(gameLoop);
+}
+
+// Auto Layout helper: calculates the maximum 9:16 area that fits cleanly inside container
+function fitCanvasLayout() {
+  const container = document.querySelector('.canvas-container');
+  const frame = document.querySelector('.canvas-frame');
+  if (!container || !frame) return;
+
+  const availW = container.clientWidth;
+  const availH = container.clientHeight;
+  if (availW <= 0 || availH <= 0) return;
+
+  let targetW = availW;
+  let targetH = targetW * (16 / 9);
+
+  if (targetH > availH) {
+    targetH = availH;
+    targetW = targetH * (9 / 16);
+  }
+
+  frame.style.width = `${Math.floor(targetW)}px`;
+  frame.style.height = `${Math.floor(targetH)}px`;
 }
 
 function resetGame() {
@@ -375,6 +421,7 @@ function selectStory(storyIdx) {
 
   resetGame();
   currentState = GameState.PLAYING;
+  requestAnimationFrame(fitCanvasLayout);
 }
 
 function returnToStageSelect() {
