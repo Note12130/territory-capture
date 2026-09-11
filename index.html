@@ -8,11 +8,16 @@
 </head>
 <body>
   <div class="game-wrapper">
+    <!-- Ambient Sci-Fi Glows -->
+    <div class="ambient-glow ambient-glow-cyan"></div>
+    <div class="ambient-glow ambient-glow-purple"></div>
+
     <!-- Stage / Story Selection Screen (Cover 1.jpeg Preview) -->
     <div id="stageSelectScreen" class="stage-select-screen">
       <header class="stage-select-header">
+        <div class="story-mode-pill">STORY MODE</div>
         <h1 class="stage-select-title">🎮 ยึดครองดินแดน</h1>
-        <p class="stage-select-subtitle">เลือกเรื่องราวที่คุณต้องการเล่น (4 ฉากต่อเนื่อง)</p>
+        <p class="stage-select-subtitle">เลือกเรื่องราวเพื่อเริ่มต้นการผจญภัย (4 ฉากต่อเนื่อง)</p>
       </header>
 
       <div id="storyCardsGrid" class="story-cards-grid">
@@ -20,46 +25,85 @@
       </div>
     </div>
 
-    <!-- Top HUD -->
+    <!-- Top HUD (High-Tech Glassmorphism Bar) -->
     <header class="hud-container">
-      <div class="hud-left-group">
-        <button id="btnBackToSelect" class="mobile-action-btn btn-back-select" aria-label="กลับหน้าเลือกด่าน" title="กลับหน้าเลือกด่าน">⬅</button>
-        <div class="hud-item hud-stage">
-          <span class="hud-label">ฉาก:</span>
-          <span id="stageIndicator" class="hud-value">1/4</span>
+      <div class="hud-main-row">
+        <div class="hud-left-group">
+          <button id="btnBackToSelect" class="mobile-action-btn btn-back-select" aria-label="กลับหน้าเลือกด่าน" title="กลับหน้าเลือกด่าน">
+            <span class="btn-icon">⬅</span>
+          </button>
+          <div class="hud-badge hud-stage">
+            <span class="hud-badge-icon">🎬</span>
+            <span class="hud-badge-label">ฉาก</span>
+            <span id="stageIndicator" class="hud-badge-value">1/4</span>
+          </div>
+        </div>
+
+        <div class="hud-mobile-actions">
+          <button id="btnMobilePause" class="mobile-action-btn" aria-label="หยุดชั่วคราว" title="หยุดชั่วคราว">⏸</button>
+          <button id="btnMobileRestart" class="mobile-action-btn" aria-label="เริ่มใหม่" title="เริ่มใหม่">🔄</button>
         </div>
       </div>
-      <div class="hud-item hud-captured">
-        <span class="hud-label">พื้นที่:</span>
-        <span id="capturedPercent" class="hud-value">0%</span>
-      </div>
-      <div class="hud-mobile-actions">
-        <button id="btnMobilePause" class="mobile-action-btn" aria-label="หยุดชั่วคราว">⏸</button>
-        <button id="btnMobileRestart" class="mobile-action-btn" aria-label="เริ่มใหม่">🔄</button>
-      </div>
-      <div class="hud-item hud-target">
-        <span class="hud-label">เป้า:</span>
-        <span id="targetPercent" class="hud-value">80%</span>
+
+      <!-- Real-Time Capture Progress Gauge -->
+      <div class="hud-progress-section">
+        <div class="hud-progress-labels">
+          <div class="hud-progress-stat">
+            <span class="stat-dot"></span>
+            <span class="hud-label">พื้นที่ยึดครอง</span>
+            <span id="capturedPercent" class="hud-percent-value">0%</span>
+          </div>
+          <div class="hud-target-stat">
+            <span class="hud-label">เป้าหมาย</span>
+            <span id="targetPercent" class="hud-target-value">80%</span>
+          </div>
+        </div>
+        <div class="hud-progress-track">
+          <div id="capturedProgressBar" class="hud-progress-fill" style="width: 0%;">
+            <div class="hud-progress-shimmer"></div>
+          </div>
+          <div class="hud-target-line" style="left: 80%;">
+            <span class="target-flag">🚩</span>
+          </div>
+        </div>
       </div>
     </header>
 
-    <!-- Canvas Area (9:16 Ratio) -->
+    <!-- Canvas Area (9:16 Ratio with Cyber Game Bezel) -->
     <main class="canvas-container">
-      <canvas id="gameCanvas" width="450" height="800"></canvas>
+      <div class="canvas-frame">
+        <div class="bezel-corner top-left"></div>
+        <div class="bezel-corner top-right"></div>
+        <div class="bezel-corner bottom-left"></div>
+        <div class="bezel-corner bottom-right"></div>
+        <canvas id="gameCanvas" width="450" height="800"></canvas>
+      </div>
     </main>
 
-    <!-- Virtual D-Pad for Mobile Touch -->
+    <!-- Virtual D-Pad (Console Controller Grade) -->
     <div id="virtualDpad" class="virtual-dpad">
-      <div class="dpad-row">
-        <button id="dpadUp" class="dpad-btn dpad-up" aria-label="ขึ้น">▲</button>
-      </div>
-      <div class="dpad-row dpad-middle">
-        <button id="dpadLeft" class="dpad-btn dpad-left" aria-label="ซ้าย">◀</button>
-        <div class="dpad-center"></div>
-        <button id="dpadRight" class="dpad-btn dpad-right" aria-label="ขวา">▶</button>
-      </div>
-      <div class="dpad-row">
-        <button id="dpadDown" class="dpad-btn dpad-down" aria-label="ลง">▼</button>
+      <div class="dpad-housing">
+        <div class="dpad-row">
+          <button id="dpadUp" class="dpad-btn dpad-up" aria-label="ขึ้น">
+            <span class="arrow-glyph">▲</span>
+          </button>
+        </div>
+        <div class="dpad-row dpad-middle">
+          <button id="dpadLeft" class="dpad-btn dpad-left" aria-label="ซ้าย">
+            <span class="arrow-glyph">◀</span>
+          </button>
+          <div class="dpad-center">
+            <div class="dpad-thumb-rest"></div>
+          </div>
+          <button id="dpadRight" class="dpad-btn dpad-right" aria-label="ขวา">
+            <span class="arrow-glyph">▶</span>
+          </button>
+        </div>
+        <div class="dpad-row">
+          <button id="dpadDown" class="dpad-btn dpad-down" aria-label="ลง">
+            <span class="arrow-glyph">▼</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -70,45 +114,56 @@
       <span><strong>หยุดชั่วคราว:</strong> P</span>
     </footer>
 
-    <!-- Overlay Modals (Positioned globally) -->
+    <!-- Overlay Modals (High Impact 3D Popups) -->
     <div id="modalOverlay" class="modal-overlay hidden">
       <!-- Game Over Modal -->
-      <div id="gameOverModal" class="modal-card hidden">
+      <div id="gameOverModal" class="modal-card modal-card-danger hidden">
+        <div class="modal-icon-banner danger-banner">💀</div>
         <h2 class="modal-title title-danger">เกมโอเวอร์</h2>
-        <p class="modal-stat">ยึดพื้นที่ได้: <span id="gameOverCaptured">0%</span></p>
+        <p class="modal-subtitle">ถูกปิศาจขัดขวางการยึดพื้นที่!</p>
+        <div class="modal-stat-box">
+          <span class="modal-stat-label">พื้นที่ที่ทำได้</span>
+          <span id="gameOverCaptured" class="modal-stat-val">0%</span>
+        </div>
         <div class="modal-btn-group">
-          <button id="btnRestart" class="btn btn-primary">ลองใหม่อีกครั้ง (R)</button>
+          <button id="btnRestart" class="btn btn-primary btn-glow-blue">ลองใหม่อีกครั้ง (R)</button>
           <button id="btnGameOverBack" class="btn btn-secondary">เลือกด่านอื่น ⬅</button>
         </div>
       </div>
 
       <!-- Level / Scene Clear Modal -->
-      <div id="levelClearModal" class="modal-card hidden">
+      <div id="levelClearModal" class="modal-card modal-card-success hidden">
+        <div class="modal-icon-banner success-banner">🏆</div>
         <h2 id="sceneClearTitle" class="modal-title title-success">ผ่านด่านแล้ว!</h2>
         <p id="sceneClearSubtitle" class="modal-subtitle">เปิดเผยภาพครบสมบูรณ์!</p>
-        <p class="modal-stat">ยึดพื้นที่ได้ <span id="levelClearCaptured">80%</span></p>
+        <div class="modal-stat-box success-stat-box">
+          <span class="modal-stat-label">ยึดพื้นที่สำเร็จ</span>
+          <span id="levelClearCaptured" class="modal-stat-val success-val">100%</span>
+        </div>
         <div class="modal-btn-group">
-          <button id="btnNextScene" class="btn btn-success">ไปด่านถัดไป ❯</button>
+          <button id="btnNextScene" class="btn btn-success btn-glow-green">ไปด่านถัดไป ❯</button>
         </div>
       </div>
 
       <!-- Story Complete Modal -->
-      <div id="storyCompleteModal" class="modal-card hidden">
+      <div id="storyCompleteModal" class="modal-card modal-card-story hidden">
+        <div class="modal-icon-banner story-banner">👑</div>
         <h2 class="modal-title title-story">จบเนื้อเรื่องสมบูรณ์!</h2>
         <p class="modal-subtitle">เปิดเผยภาพครบทั้ง 4 ฉากของเรื่องราวเรียบร้อยแล้ว!</p>
-        <p class="modal-stat">🎉 ยินดีด้วย คุณผ่านทุกด่านแล้ว! 🎉</p>
+        <p class="modal-stat-award">🎉 ยินดีด้วย คุณพิชิตทุกฉากแล้ว! 🎉</p>
         <div class="modal-btn-group">
-          <button id="btnReplayStory" class="btn btn-primary">เล่นเนื้อเรื่องใหม่อีกครั้ง ↺</button>
+          <button id="btnReplayStory" class="btn btn-primary btn-glow-blue">เล่นเนื้อเรื่องใหม่อีกครั้ง ↺</button>
           <button id="btnStoryCompleteBack" class="btn btn-secondary">เลือกเรื่องราวอื่น ⬅</button>
         </div>
       </div>
 
       <!-- Pause Overlay -->
-      <div id="pauseModal" class="modal-card hidden">
+      <div id="pauseModal" class="modal-card modal-card-pause hidden">
+        <div class="modal-icon-banner pause-banner">⏸</div>
         <h2 class="modal-title">พักเกมชั่วคราว</h2>
         <p class="modal-subtitle">กด P หรือแตะหน้าจอเพื่อเล่นต่อ</p>
-        <div class="modal-btn-group" style="margin-top: 12px;">
-          <button id="btnPauseResume" class="btn btn-primary">เล่นต่อ ▶</button>
+        <div class="modal-btn-group" style="margin-top: 14px;">
+          <button id="btnPauseResume" class="btn btn-primary btn-glow-blue">เล่นต่อ ▶</button>
           <button id="btnPauseBack" class="btn btn-secondary">กลับหน้าเลือกด่าน ⬅</button>
         </div>
       </div>

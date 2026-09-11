@@ -138,11 +138,12 @@ const boss = {
 // Minions (Dynamic count: Stage 1 has 2, each subsequent stage adds 1 minion)
 let minions = [];
 
-// Defeat particle effects (when minions are trapped/enclosed)
+// Defeat particle effects & Floating Text (when minions are trapped or territory captured)
 let defeatParticles = [];
+let floatingTexts = [];
 
 // DOM Elements
-let elCapturedPercent, elTargetPercent, elStageIndicator;
+let elCapturedPercent, elCapturedProgressBar, elTargetPercent, elStageIndicator;
 let elModalOverlay, elGameOverModal, elLevelClearModal, elPauseModal, elStoryCompleteModal;
 let elGameOverCaptured, elLevelClearCaptured;
 let elSceneClearTitle, elSceneClearSubtitle;
@@ -166,6 +167,7 @@ function initGame() {
 
   // Bind DOM elements
   elCapturedPercent = document.getElementById('capturedPercent');
+  elCapturedProgressBar = document.getElementById('capturedProgressBar');
   elTargetPercent = document.getElementById('targetPercent');
   elStageIndicator = document.getElementById('stageIndicator');
   elModalOverlay = document.getElementById('modalOverlay');
@@ -302,6 +304,7 @@ function resetGame() {
     });
   }
   defeatParticles = [];
+  floatingTexts = [];
 
   // 5. Reset Percentage & State
   currentCapturedPercent = 0;
@@ -590,6 +593,7 @@ function updateGame(dt) {
   updateMinions(dt);
   checkCollisions();
   updateParticles(dt);
+  updateFloatingTexts(dt);
 }
 
 // Helper: Check if a cell is an active walkable border (borders at least one EMPTY cell)
@@ -836,6 +840,7 @@ function checkCollisions() {
 // ==========================================
 function captureTerritory() {
   currentState = GameState.CAPTURING;
+  const prevPercent = currentCapturedPercent;
 
   // 1. Find Boss Grid cell
   let bossGX = Math.floor(boss.x / levelConfig.cellSize);
@@ -915,6 +920,7 @@ function captureTerritory() {
       if (getCell(gx, gy) === CELL_TYPE.CLAIMED) {
         minion.alive = false;
         spawnDefeatParticles(minion.x, minion.y, '#e879f9');
+        spawnFloatingText('💥 กำจัดลูกน้อง!', minion.x, minion.y - 14, '#f0abfc', 15);
       }
     }
   }
@@ -961,6 +967,14 @@ function captureTerritory() {
   currentCapturedPercent = calculateCapturedPercentage();
   updateHUD();
 
+  // Floating text feedback for percentage gained
+  const gained = currentCapturedPercent - prevPercent;
+  if (gained > 0) {
+    const fx = Math.min(canvas.width - 50, Math.max(50, player.x * cs));
+    const fy = Math.min(canvas.height - 30, Math.max(30, player.y * cs - 16));
+    spawnFloatingText(`+${gained}%`, fx, fy, '#38bdf8', 22);
+  }
+
   // 7. Check Win Condition
   if (currentCapturedPercent >= levelConfig.targetPercent) {
     winLevel();
@@ -986,7 +1000,18 @@ function calculateCapturedPercentage() {
 // 10. GAME LIFECYCLE & MODALS
 // ==========================================
 function updateHUD() {
-  elCapturedPercent.textContent = `${currentCapturedPercent}%`;
+  if (elCapturedPercent) {
+    elCapturedPercent.textContent = `${currentCapturedPercent}%`;
+  }
+  if (elCapturedProgressBar) {
+    const pct = Math.min(100, Math.max(0, currentCapturedPercent));
+    elCapturedProgressBar.style.width = `${pct}%`;
+    if (pct >= levelConfig.targetPercent) {
+      elCapturedProgressBar.classList.add('goal-reached');
+    } else {
+      elCapturedProgressBar.classList.remove('goal-reached');
+    }
+  }
 }
 
 function killPlayer() {
@@ -1122,6 +1147,9 @@ function renderGame() {
 
   // Render Defeat Particles
   renderParticles(ctx);
+
+  // Render Floating Text FX
+  renderFloatingTexts(ctx);
 
   // Render Player (Prominent cutting indicator with beacon pulse)
   renderPlayer(ctx);
@@ -1392,6 +1420,52 @@ function renderParticles(c) {
     c.beginPath();
     c.arc(p.x, p.y, p.size, 0, Math.PI * 2);
     c.fill();
+  }
+  c.restore();
+}
+
+// Floating Feedback Text System
+function spawnFloatingText(text, x, y, color = '#38bdf8', size = 18) {
+  floatingTexts.push({
+    text,
+    x,
+    y,
+    color,
+    size,
+    vy: -35,
+    life: 0.9,
+    maxLife: 0.9
+  });
+}
+
+function updateFloatingTexts(dt) {
+  for (let i = floatingTexts.length - 1; i >= 0; i--) {
+    const ft = floatingTexts[i];
+    ft.life -= dt;
+    if (ft.life <= 0) {
+      floatingTexts.splice(i, 1);
+      continue;
+    }
+    ft.y += ft.vy * dt;
+  }
+}
+
+function renderFloatingTexts(c) {
+  if (floatingTexts.length === 0) return;
+  c.save();
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  for (const ft of floatingTexts) {
+    const alpha = Math.max(0, ft.life / ft.maxLife);
+    c.globalAlpha = alpha;
+    c.font = `900 ${ft.size}px 'Rajdhani', -apple-system, sans-serif`;
+    c.strokeStyle = 'rgba(0, 0, 0, 0.9)';
+    c.lineWidth = 4;
+    c.strokeText(ft.text, ft.x, ft.y);
+    c.fillStyle = ft.color;
+    c.shadowColor = ft.color;
+    c.shadowBlur = 10;
+    c.fillText(ft.text, ft.x, ft.y);
   }
   c.restore();
 }
