@@ -14,6 +14,7 @@ const levelConfig = {
   height: 80,          // Grid rows
   cellSize: 10,        // Pixels per cell (45 * 10 = 450, 80 * 10 = 800)
   targetPercent: 80,   // Clear condition percentage
+  stageTimeLimit: 60,  // Countdown timer in seconds per stage
   bossSpeed: 85,       // Boss movement speed in pixels per second
   playerSpeed: 24,     // Player grid steps per second
   bossRadius: 15,      // Boss collision radius in pixels (large and menacing)
@@ -167,8 +168,12 @@ let burstMinions = [];
 let defeatParticles = [];
 let floatingTexts = [];
 
+// Stage Countdown Timer State
+let stageTimeRemaining = levelConfig.stageTimeLimit;
+
 // DOM Elements
 let elCapturedPercent, elCapturedProgressBar, elTargetPercent, elStageIndicator;
+let elStageTimer, elHudTimerBadge;
 let elModalOverlay, elGameOverModal, elLevelClearModal, elPauseModal, elStoryCompleteModal;
 let elGameOverCaptured, elLevelClearCaptured;
 let elSceneClearTitle, elSceneClearSubtitle;
@@ -192,6 +197,8 @@ function initGame() {
   // Bind DOM elements
   elCapturedPercent = document.getElementById('capturedPercent');
   elCapturedProgressBar = document.getElementById('capturedProgressBar');
+  elStageTimer = document.getElementById('stageTimer');
+  elHudTimerBadge = document.getElementById('hudTimerBadge');
   elTargetPercent = document.getElementById('targetPercent');
   elStageIndicator = document.getElementById('stageIndicator');
   elModalOverlay = document.getElementById('modalOverlay');
@@ -371,8 +378,9 @@ function resetGame() {
   defeatParticles = [];
   floatingTexts = [];
 
-  // 5. Reset Percentage & State
+  // 5. Reset Percentage, Timer & State
   currentCapturedPercent = 0;
+  stageTimeRemaining = levelConfig.stageTimeLimit;
   updateHUD();
   currentState = GameState.PLAYING;
 }
@@ -656,6 +664,17 @@ function gameLoop(timestamp) {
 }
 
 function updateGame(dt) {
+  // 1. Stage Countdown Timer (60s)
+  if (stageTimeRemaining > 0) {
+    stageTimeRemaining -= dt;
+    if (stageTimeRemaining <= 0) {
+      stageTimeRemaining = 0;
+      updateHUD();
+      killPlayer('TIMEOUT');
+      return;
+    }
+  }
+
   updatePlayer(dt);
   updateBoss(dt);
   updateMinions(dt);
@@ -663,6 +682,7 @@ function updateGame(dt) {
   checkCollisions();
   updateParticles(dt);
   updateFloatingTexts(dt);
+  updateHUD();
 }
 
 // Helper: Check if a cell is an active walkable border (borders at least one EMPTY cell)
@@ -1191,9 +1211,20 @@ function updateHUD() {
       elCapturedProgressBar.classList.remove('goal-reached');
     }
   }
+  if (elStageTimer) {
+    const secs = Math.max(0, Math.ceil(stageTimeRemaining));
+    elStageTimer.textContent = `${secs}s`;
+    if (elHudTimerBadge) {
+      if (secs <= 15) {
+        elHudTimerBadge.classList.add('time-warning');
+      } else {
+        elHudTimerBadge.classList.remove('time-warning');
+      }
+    }
+  }
 }
 
-function killPlayer() {
+function killPlayer(reason = 'COLLISION') {
   currentState = GameState.DEAD;
   player.state = PlayerState.DEAD;
 
@@ -1202,6 +1233,13 @@ function killPlayer() {
     setCell(pt.x, pt.y, CELL_TYPE.EMPTY);
   }
   trail = [];
+
+  const elGameOverSubtitle = document.querySelector('#gameOverModal .modal-subtitle');
+  if (reason === 'TIMEOUT') {
+    if (elGameOverSubtitle) elGameOverSubtitle.textContent = 'หมดเวลา 60 วินาที! ยึดพื้นที่ไม่ทัน';
+  } else {
+    if (elGameOverSubtitle) elGameOverSubtitle.textContent = 'ถูกปิศาจขัดขวางการยึดพื้นที่!';
+  }
 
   elGameOverCaptured.textContent = `${currentCapturedPercent}%`;
   showModal(elGameOverModal);

@@ -148,6 +148,36 @@ html, body {
   font-family: "Courier New", Courier, monospace;
 }
 
+/* Stage Countdown Timer Badge */
+.hud-timer {
+  border-color: rgba(56, 189, 248, 0.4);
+  background: rgba(15, 23, 42, 0.85);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.hud-timer .hud-badge-value {
+  color: #38bdf8;
+  font-size: 14px;
+  min-width: 26px;
+  text-align: center;
+}
+
+/* Low Time Warning (<= 15 seconds) */
+.hud-timer.time-warning {
+  border-color: #ef4444;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.6), inset 0 1px 2px rgba(0,0,0,0.5);
+  animation: pulseTimerWarning 0.8s infinite alternate;
+}
+
+.hud-timer.time-warning .hud-badge-value {
+  color: #ef4444;
+}
+
+@keyframes pulseTimerWarning {
+  0% { transform: scale(1); box-shadow: 0 0 6px rgba(239, 68, 68, 0.4); }
+  100% { transform: scale(1.06); box-shadow: 0 0 16px rgba(239, 68, 68, 0.9); }
+}
+
 /* Real-Time Capture Progress Gauge */
 .hud-progress-section {
   display: flex;
