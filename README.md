@@ -54,22 +54,50 @@
 
 ---
 
-## 🚀 วิธีการรันเกม (How to Run)
+## 🚀 วิธีการรันเกมในเครื่อง (Local Run)
 
 ### วิธีที่ 1: เปิดไฟล์ตรง ๆ บน Browser
-ดับเบิลคลิกเปิดไฟล์ `index.html` ด้วย Web Browser ใดก็ได้ (เช่น Google Chrome, Safari, Edge, Firefox)
+ดับเบิลคลิกเปิดไฟล์ `index.html` ด้วย Web Browser ใดก็ได้ (เช่น Chrome, Safari, Edge)
 
 ### วิธีที่ 2: รันผ่าน Local HTTP Server
-เปิด Terminal เข้าสู่โฟลเดอร์โปรเจกต์แล้วรันคำสั่ง:
-
 ```bash
+npx serve .
+# หรือ
 python3 -m http.server 8000
 ```
+จากนั้นเปิด Browser ไปที่ `http://localhost:8000` (หรือ URL ที่แสดงใน Terminal)
 
-จากนั้นเปิด Browser ไปที่:
-```text
-http://localhost:8000
+---
+
+## 🌐 วิธีนำขึ้น GitHub (Push to GitHub)
+
+1. สร้าง Repository ใหม่บน [GitHub.com](https://github.com/new) (เช่น ตั้งชื่อว่า `territory-capture`)
+2. เชื่อมต่อ Remote และ Push โค้ดขึ้น GitHub:
+```bash
+git remote add origin https://github.com/<YOUR_USERNAME>/territory-capture.git
+git branch -M main
+git push -u origin main
 ```
+*(หากใช้ SSH: `git remote add origin git@github.com:<YOUR_USERNAME>/territory-capture.git`)*
+
+---
+
+## ⚡ วิธี Deploy บน Vercel (Vercel Deployment)
+
+โปรเจกต์นี้มีไฟล์ `vercel.json` และโครงสร้างเว็บแบบ Static HTML/JS พร้อมใช้งานบน Vercel ทันที:
+
+### วิธีที่ 1: Deploy ผ่าน Vercel Dashboard (แนะนำ — อัปเดตอัตโนมัติเมื่อ push code)
+1. ไปที่ [Vercel Dashboard](https://vercel.com/dashboard) แล้วล็อกอิน
+2. คลิก **Add New...** > **Project**
+3. เลือก Repository `territory-capture` จาก GitHub ของคุณ
+4. Framework Preset ให้เลือกเป็น **Other** (หรือ Vercel จะตรวจจับเป็น Static Site ให้อัตโนมัติ)
+5. คลิก **Deploy** — รอไม่เกิน 15 วินาที เว็บเกมจะพร้อมเล่นทันทีผ่าน Public URL!
+
+### วิธีที่ 2: Deploy ผ่าน Vercel CLI บนเครื่อง
+```bash
+npx vercel
+```
+ทำตามขั้นตอนบน Terminal เพื่อล็อกอินและเลือก Deploy ได้ทันที
 
 ---
 
@@ -77,22 +105,26 @@ http://localhost:8000
 
 ```text
 territory-capture/
-├── index.html        # โครงสร้างหน้าเว็บ Canvas, HUD และ Overlay Modals
-├── style.css         # Minimal Flat UI Responsive styling (4:3 aspect ratio)
-├── game.js           # Core Game Engine, BFS Flood Fill, Physics & Collision
-├── README.md         # คู่มือการติดตั้งและวิธีเล่น
+├── index.html        # โครงสร้างหน้าเว็บ หน้าเลือกด่าน Canvas HUD และ Modals
+├── style.css         # ดีไซน์สไตล์มินิมอล รองรับจอ 9:16 บนมือถือและ Desktop
+├── game.js           # Game Engine, ฟิสิกส์บอสและลูกน้อง, BFS Flood Fill
+├── package.json      # Metadata และ npm scripts
+├── vercel.json       # การตั้งค่า Cache และ Clean URLs สำหรับ Vercel
+├── .gitignore        # กำหนดไฟล์ที่ไม่ต้องนำขึ้น Git
+├── README.md         # เอกสารแนะนำและคู่มือการใช้งาน
+├── assets/           # โฟลเดอร์รูปภาพแยกตามเรื่องราว
+│   └── scene/
+│       ├── 1/        # เรื่องราวที่ 1 (1.jpeg, 2.jpeg, 3.jpeg, 4.jpeg)
+│       └── 2/        # เรื่องราวที่ 2 (1.jpeg, 2.jpeg, 3.jpeg, 4.jpeg)
 └── ai/               # ข้อกำหนดและเอกสาร Task breakdown
-    ├── requirement.md
-    ├── task.md
-    ├── task1.md ... task9.md
 ```
 
 ---
 
 ## ⚙️ คุณสมบัติทางเทคนิค (Technical Highlights)
 
-- **Canvas 2D Rendering**: ทำงานที่ 60 FPS บนความละเอียด 800×600 พิกเซล
-- **Responsive Layout**: รักษาอัตราส่วน 4:3 บนหน้าจอทุกขนาด ทั้ง Desktop และ Mobile
-- **Grid Representation**: ตารางจำลองพื้นที่ 80×60 ช่อง (Cell Size 10px) พร้อมคำนวณพื้นที่แบบ 1D Flat Array
-- **BFS Flood Fill**: ค้นหาขอบเขตของ Boss อย่างแม่นยำทุกครั้งที่ลากเส้นกลับเข้าขอบ โดยไม่กระทบ Performance ในลูปปกติ
-- **Zero Dependencies**: ไม่มี Ads, ไม่มี Database, ไม่มี Frameworks, ไม่มี External Assets
+- **Canvas 2D Rendering**: แสดงผล 60 FPS บนสัดส่วนแนวตั้ง 9:16 (450×800) เหมาะกับหน้าจอมือถือ
+- **Boss & Minions AI**: บอสตัวใหญ่พร้อมลูกน้องปิศาจค้างคาวเพิ่มขึ้นตามความยากของแต่ละด่าน
+- **BFS Flood Fill Capture**: คำนวณแบ่งอาณาเขตที่ถูกตัดยึดอย่างรวดเร็วและแม่นยำ
+- **Zero Dependencies**: ไม่มี Framework หนัก ๆ ทำงานลื่นไหล เบา โหลดเร็ว ไม่ต้องพึ่งไลบรารีภายนอก
+
