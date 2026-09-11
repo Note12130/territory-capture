@@ -145,11 +145,23 @@ const boss = {
   y: 400,
   vx: 0,
   vy: 0,
-  radius: levelConfig.bossRadius
+  radius: levelConfig.bossRadius,
+  isCharging: false,
+  chargeTimer: 0,
+  chargeDuration: 1.1
 };
+
+// Boss burst mechanics: random 5 - 15 seconds timer
+function getRandomBurstInterval() {
+  return 5 + Math.random() * 10; // 5 - 15 seconds
+}
+let bossBurstTimer = getRandomBurstInterval();
 
 // Minions (Dynamic count: Stage 1 has 2, each subsequent stage adds 1 minion)
 let minions = [];
+
+// Dispersed Burst Minions (Spawned during boss power burst; vanish on edge collision)
+let burstMinions = [];
 
 // Defeat particle effects & Floating Text (when minions are trapped or territory captured)
 let defeatParticles = [];
@@ -334,6 +346,9 @@ function resetGame() {
   boss.vx = Math.cos(angle) * levelConfig.bossSpeed;
   boss.vy = Math.sin(angle) * levelConfig.bossSpeed;
   boss.radius = levelConfig.bossRadius;
+  boss.isCharging = false;
+  boss.chargeTimer = 0;
+  bossBurstTimer = getRandomBurstInterval();
 
   // 4.1 Reset Minions (Stage 1 has 2 minions, each subsequent stage adds 1 minion)
   const minionCount = 2 + currentStageIndex;
@@ -352,6 +367,7 @@ function resetGame() {
       alive: true
     });
   }
+  burstMinions = [];
   defeatParticles = [];
   floatingTexts = [];
 
@@ -643,6 +659,7 @@ function updateGame(dt) {
   updatePlayer(dt);
   updateBoss(dt);
   updateMinions(dt);
+  updateBurstMinions(dt);
   checkCollisions();
   updateParticles(dt);
   updateFloatingTexts(dt);
@@ -814,7 +831,61 @@ function updateBouncingEntity(entity, dt) {
 }
 
 function updateBoss(dt) {
-  updateBouncingEntity(boss, dt);
+  if (currentState !== GameState.PLAYING) return;
+
+  if (boss.isCharging) {
+    // Boss is stopped in place charging power!
+    boss.chargeTimer -= dt;
+    if (boss.chargeTimer <= 0) {
+      triggerBossBurst();
+    }
+  } else {
+    bossBurstTimer -= dt;
+    if (bossBurstTimer <= 0) {
+      startBossCharging();
+    } else {
+      updateBouncingEntity(boss, dt);
+    }
+  }
+}
+
+function startBossCharging() {
+  boss.isCharging = true;
+  boss.chargeDuration = 1.1; // 1.1 seconds stop & charge
+  boss.chargeTimer = boss.chargeDuration;
+  spawnFloatingText('⚡ บอสกำลังรวมพลัง!', boss.x, boss.y - 28, '#f87171', 16);
+}
+
+function triggerBossBurst() {
+  boss.isCharging = false;
+  bossBurstTimer = getRandomBurstInterval();
+
+  // Burst 8 minions radiating in all 8 directions
+  const burstCount = 8;
+  const burstSpeed = 75; // px/sec
+  const baseAngle = Math.random() * Math.PI * 2;
+
+  for (let i = 0; i < burstCount; i++) {
+    const angle = baseAngle + (Math.PI * 2 * i) / burstCount;
+    burstMinions.push({
+      id: Date.now() + i,
+      x: boss.x + Math.cos(angle) * (boss.radius + 4),
+      y: boss.y + Math.sin(angle) * (boss.radius + 4),
+      vx: Math.cos(angle) * burstSpeed,
+      vy: Math.sin(angle) * burstSpeed,
+      radius: 6.5,
+      alive: true
+    });
+  }
+
+  // Shockwave & fiery burst particles
+  spawnDefeatParticles(boss.x, boss.y, '#ef4444');
+  spawnFloatingText('💥 ระเบิดพลัง!', boss.x, boss.y - 26, '#f43f5e', 20);
+
+  // Resume boss movement with new dynamic angle
+  const resumeAngle = Math.random() * Math.PI * 2;
+  boss.vx = Math.cos(resumeAngle) * levelConfig.bossSpeed;
+  boss.vy = Math.sin(resumeAngle) * levelConfig.bossSpeed;
 }
 
 function updateMinions(dt) {
@@ -822,6 +893,42 @@ function updateMinions(dt) {
     if (minion.alive) {
       updateBouncingEntity(minion, dt);
     }
+  }
+}
+
+function updateBurstMinions(dt) {
+  const cs = levelConfig.cellSize;
+  for (let i = burstMinions.length - 1; i >= 0; i--) {
+    const bm = burstMinions[i];
+    if (!bm.alive) {
+      burstMinions.splice(i, 1);
+      continue;
+    }
+
+    const nextX = bm.x + bm.vx * dt;
+    const nextY = bm.y + bm.vy * dt;
+    const r = bm.radius;
+
+    // 1. Check canvas edges: if hits canvas boundary, vanish!
+    if (nextX <= r + cs || nextX >= canvas.width - r - cs || nextY <= r + cs || nextY >= canvas.height - r - cs) {
+      bm.alive = false;
+      spawnDefeatParticles(bm.x, bm.y, '#f87171');
+      burstMinions.splice(i, 1);
+      continue;
+    }
+
+    // 2. Check claimed cell collision: if hits border/claimed territory, vanish!
+    const gx = Math.floor(nextX / cs);
+    const gy = Math.floor(nextY / cs);
+    if (getCell(gx, gy) === CELL_TYPE.CLAIMED) {
+      bm.alive = false;
+      spawnDefeatParticles(bm.x, bm.y, '#f87171');
+      burstMinions.splice(i, 1);
+      continue;
+    }
+
+    bm.x = nextX;
+    bm.y = nextY;
   }
 }
 
@@ -881,6 +988,14 @@ function checkCollisions() {
   // Check Minions
   for (const minion of minions) {
     if (minion.alive && checkEnemyCollision(minion)) {
+      killPlayer();
+      return;
+    }
+  }
+
+  // Check Burst Minions
+  for (const bm of burstMinions) {
+    if (bm.alive && checkEnemyCollision(bm)) {
       killPlayer();
       return;
     }
@@ -973,6 +1088,18 @@ function captureTerritory() {
         minion.alive = false;
         spawnDefeatParticles(minion.x, minion.y, '#e879f9');
         spawnFloatingText('💥 กำจัดลูกน้อง!', minion.x, minion.y - 14, '#f0abfc', 15);
+      }
+    }
+  }
+
+  // 3.2 Check and destroy enclosed burst minions
+  for (const bm of burstMinions) {
+    if (bm.alive) {
+      const gx = Math.floor(bm.x / cs);
+      const gy = Math.floor(bm.y / cs);
+      if (getCell(gx, gy) === CELL_TYPE.CLAIMED) {
+        bm.alive = false;
+        spawnDefeatParticles(bm.x, bm.y, '#f87171');
       }
     }
   }
@@ -1194,8 +1321,11 @@ function renderGame() {
   // Render Boss (Large menacing demonic boss)
   renderBoss(ctx);
 
-  // Render Minions (2 smaller, slower minions)
+  // Render Minions (Persistent minions)
   renderMinions(ctx);
+
+  // Render Burst Minions (Temporary radiating power-burst minions)
+  renderBurstMinions(ctx);
 
   // Render Defeat Particles
   renderParticles(ctx);
@@ -1217,10 +1347,34 @@ function renderBoss(c) {
   const pulse = Math.sin(time) * 1.5;
   const r = boss.radius + pulse; // ~15-16.5px base radius
 
+  // Charging visual effect (vibration & danger ring)
+  if (boss.isCharging) {
+    const chargeProgress = 1 - (boss.chargeTimer / boss.chargeDuration);
+    const ringR = r + 8 + (1 - chargeProgress) * 22;
+    c.save();
+    c.beginPath();
+    c.arc(boss.x, boss.y, ringR, 0, Math.PI * 2);
+    c.strokeStyle = `rgba(239, 68, 68, ${0.4 + chargeProgress * 0.6})`;
+    c.lineWidth = 2.5;
+    c.setLineDash([5, 5]);
+    c.stroke();
+
+    // Pulsing danger warning aura
+    c.beginPath();
+    c.arc(boss.x, boss.y, r * (1.2 + Math.sin(time * 20) * 0.2), 0, Math.PI * 2);
+    c.fillStyle = `rgba(244, 63, 94, ${0.15 + chargeProgress * 0.25})`;
+    c.fill();
+    c.restore();
+  }
+
   c.save();
+  // If charging, shake boss violently
+  if (boss.isCharging) {
+    c.translate((Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4);
+  }
   // Menacing red fiery aura glow
   c.shadowColor = '#ef4444';
-  c.shadowBlur = 16 + Math.sin(time * 1.5) * 4;
+  c.shadowBlur = (boss.isCharging ? 28 : 16) + Math.sin(time * 1.5) * 4;
 
   // 1. Spikes / Demonic horns radiating from perimeter
   c.fillStyle = '#7f1d1d';
@@ -1427,6 +1581,55 @@ function renderMinion(c, minion) {
   c.arc(minion.x + eyeOffset, eyeY, eyeR * 0.4, 0, Math.PI * 2);
   c.fill();
 
+  c.restore();
+}
+
+function renderBurstMinions(c) {
+  if (burstMinions.length === 0) return;
+  c.save();
+  for (const bm of burstMinions) {
+    if (!bm.alive) continue;
+    const r = bm.radius;
+
+    // Fiery crimson glow aura
+    c.shadowColor = '#ef4444';
+    c.shadowBlur = 12;
+
+    // 1. Trailing fiery flame tail behind motion
+    const angle = Math.atan2(bm.vy, bm.vx);
+    const tailLen = r * 2.0;
+    c.fillStyle = 'rgba(239, 68, 68, 0.45)';
+    c.beginPath();
+    c.moveTo(bm.x + Math.cos(angle + Math.PI / 2) * (r * 0.65), bm.y + Math.sin(angle + Math.PI / 2) * (r * 0.65));
+    c.lineTo(bm.x - Math.cos(angle) * tailLen, bm.y - Math.sin(angle) * tailLen);
+    c.lineTo(bm.x - Math.cos(angle - Math.PI / 2) * (r * 0.65), bm.y - Math.sin(angle - Math.PI / 2) * (r * 0.65));
+    c.closePath();
+    c.fill();
+
+    // 2. Body Gradient (Fiery Demon Spark)
+    const grad = c.createRadialGradient(
+      bm.x - r * 0.3, bm.y - r * 0.3, 1,
+      bm.x, bm.y, r
+    );
+    grad.addColorStop(0, '#fef08a'); // Bright yellow-white core
+    grad.addColorStop(0.35, '#f87171');
+    grad.addColorStop(0.8, '#dc2626');
+    grad.addColorStop(1, '#7f1d1d');
+
+    c.fillStyle = grad;
+    c.beginPath();
+    c.arc(bm.x, bm.y, r, 0, Math.PI * 2);
+    c.fill();
+    c.lineWidth = 1.2;
+    c.strokeStyle = '#fca5a5';
+    c.stroke();
+
+    // 3. Glowing fiery eye/center
+    c.fillStyle = '#ffffff';
+    c.beginPath();
+    c.arc(bm.x + Math.cos(angle) * (r * 0.25), bm.y + Math.sin(angle) * (r * 0.25), 1.5, 0, Math.PI * 2);
+    c.fill();
+  }
   c.restore();
 }
 
