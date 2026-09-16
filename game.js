@@ -15,12 +15,21 @@ const levelConfig = {
   cellSize: 10,        // Pixels per cell (45 * 10 = 450, 80 * 10 = 800)
   targetPercent: 80,   // Clear condition percentage
   stageTimeLimit: 60,  // Countdown timer in seconds per stage
-  bossSpeed: 85,       // Boss movement speed in pixels per second
+  bossSpeed: 85,       // Base boss movement speed in pixels per second
   playerSpeed: 24,     // Player grid steps per second
   bossRadius: 15,      // Boss collision radius in pixels (large and menacing)
-  minionSpeed: 48,     // Minion movement speed in pixels per second (slower than boss)
+  minionSpeed: 50,     // Base minion movement speed in pixels per second
   minionRadius: 8      // Minion collision radius in pixels (smaller than boss)
 };
+
+// Stage-based Speed Scaling Helpers
+function getBossBaseSpeed() {
+  return levelConfig.bossSpeed + currentStageIndex * 7;
+}
+
+function getMinionBaseSpeed() {
+  return levelConfig.minionSpeed + currentStageIndex * 6;
+}
 
 // Stories Collection (assets/scene/1/, assets/scene/2/, ...)
 // The first image 1.jpeg in each folder is used as the cover preview
@@ -149,14 +158,27 @@ const boss = {
   radius: levelConfig.bossRadius,
   isCharging: false,
   chargeTimer: 0,
-  chargeDuration: 1.1
+  chargeDuration: 1.1,
+  isEnraged: false,
+  isHyper: false,
+  notifiedEnraged: false,
+  notifiedHyper: false
 };
 
-// Boss burst mechanics: random 5 - 15 seconds timer
-function getRandomBurstInterval() {
-  return 5 + Math.random() * 10; // 5 - 15 seconds
+// Boss burst mechanics: random interval scaled by rage state
+function getRandomBurstInterval(enraged = false, hyper = false) {
+  if (hyper) {
+    return 2.5 + Math.random() * 2.5; // 2.5 - 5 seconds in Hyper mode
+  }
+  if (enraged) {
+    return 3.5 + Math.random() * 3.5; // 3.5 - 7 seconds in Enraged mode
+  }
+  return 5 + Math.random() * 8; // 5 - 13 seconds in Normal mode
 }
 let bossBurstTimer = getRandomBurstInterval();
+
+// Anti-camping pressure timer (when player idles on safe border)
+let playerIdleOnBorderTimer = 0;
 
 // Minions (Dynamic count: Stage 1 has 2, each subsequent stage adds 1 minion)
 let minions = [];
@@ -349,34 +371,47 @@ function resetGame() {
   // 4. Reset Boss (Place in middle of 450x800 empty territory with angle)
   boss.x = (levelConfig.width / 2) * levelConfig.cellSize;
   boss.y = (levelConfig.height / 2) * levelConfig.cellSize;
+  const baseBossSpeed = getBossBaseSpeed();
   const angle = (Math.PI / 4) * (Math.random() < 0.5 ? 1 : 3) * (Math.random() < 0.5 ? 1 : -1);
-  boss.vx = Math.cos(angle) * levelConfig.bossSpeed;
-  boss.vy = Math.sin(angle) * levelConfig.bossSpeed;
+  boss.vx = Math.cos(angle) * baseBossSpeed;
+  boss.vy = Math.sin(angle) * baseBossSpeed;
   boss.radius = levelConfig.bossRadius;
   boss.isCharging = false;
   boss.chargeTimer = 0;
+  boss.isEnraged = false;
+  boss.isHyper = false;
+  boss.notifiedEnraged = false;
+  boss.notifiedHyper = false;
   bossBurstTimer = getRandomBurstInterval();
 
   // 4.1 Reset Minions (Stage 1 has 2 minions, each subsequent stage adds 1 minion)
   const minionCount = 2 + currentStageIndex;
+  const baseMinionSpeed = getMinionBaseSpeed();
+  // Hunters: Stage 1-2 have 1 hunter, Stage 3-4 have 2 hunters
+  const hunterCount = currentStageIndex >= 2 ? 2 : 1;
   minions = [];
   for (let i = 0; i < minionCount; i++) {
     const angleOffset = (Math.PI * 2 * i) / minionCount;
     const dist = 75 + (i % 2 === 0 ? 15 : -15);
     const mAngle = angle + angleOffset + Math.PI / 6;
+    const isHunter = i < hunterCount;
+    const speed = isHunter ? baseMinionSpeed * 1.08 : baseMinionSpeed;
     minions.push({
       id: i + 1,
       x: boss.x + Math.cos(angleOffset) * dist,
       y: boss.y + Math.sin(angleOffset) * dist,
-      vx: Math.cos(mAngle) * levelConfig.minionSpeed,
-      vy: Math.sin(mAngle) * levelConfig.minionSpeed,
-      radius: levelConfig.minionRadius,
-      alive: true
+      vx: Math.cos(mAngle) * speed,
+      vy: Math.sin(mAngle) * speed,
+      radius: isHunter ? levelConfig.minionRadius + 1.5 : levelConfig.minionRadius,
+      alive: true,
+      isHunter: isHunter,
+      baseSpeed: speed
     });
   }
   burstMinions = [];
   defeatParticles = [];
   floatingTexts = [];
+  playerIdleOnBorderTimer = 0;
 
   // 5. Reset Percentage, Timer & State
   currentCapturedPercent = 0;
@@ -718,6 +753,24 @@ function updatePlayer(dt) {
     return;
   }
 
+  // Anti-camping pressure: check if player is idling on safe border
+  if (player.state === PlayerState.ON_BORDER) {
+    if (player.inputDx === 0 && player.inputDy === 0) {
+      playerIdleOnBorderTimer += dt;
+      if (playerIdleOnBorderTimer >= 4.0) {
+        playerIdleOnBorderTimer = 0;
+        spawnFloatingText('⚠️ ระวัง! อย่าอยู่นิ่ง', player.x * levelConfig.cellSize, (player.y + 2) * levelConfig.cellSize, '#fbbf24', 16);
+        if (!boss.isCharging && currentState === GameState.PLAYING) {
+          startBossCharging();
+        }
+      }
+    } else {
+      playerIdleOnBorderTimer = 0;
+    }
+  } else {
+    playerIdleOnBorderTimer = 0;
+  }
+
   // Attempt movement if input is active
   if (player.inputDx === 0 && player.inputDy === 0) {
     return;
@@ -853,6 +906,51 @@ function updateBouncingEntity(entity, dt) {
 function updateBoss(dt) {
   if (currentState !== GameState.PLAYING) return;
 
+  // 1. Check Enrage & Hyper Berserk conditions
+  const shouldBeHyper = currentCapturedPercent >= 75;
+  const shouldBeEnraged = shouldBeHyper || currentCapturedPercent >= 50 || stageTimeRemaining <= 20;
+
+  if (shouldBeHyper && !boss.isHyper) {
+    boss.isHyper = true;
+    boss.isEnraged = true;
+    if (!boss.notifiedHyper) {
+      boss.notifiedHyper = true;
+      spawnFloatingText('⚡ บอสคลั่งขั้นสุด (HYPER)!', boss.x, boss.y - 32, '#ef4444', 18);
+      spawnDefeatParticles(boss.x, boss.y, '#ef4444');
+    }
+  } else if (shouldBeEnraged && !boss.isEnraged) {
+    boss.isEnraged = true;
+    if (!boss.notifiedEnraged) {
+      boss.notifiedEnraged = true;
+      spawnFloatingText('🔥 บอสเข้าสู่โหมดคลั่ง!', boss.x, boss.y - 30, '#f97316', 17);
+      spawnDefeatParticles(boss.x, boss.y, '#f97316');
+    }
+  }
+
+  // Speed adjustments according to status
+  const baseSpeed = getBossBaseSpeed();
+  const speedMult = boss.isHyper ? 1.45 : (boss.isEnraged ? 1.30 : 1.0);
+  const targetSpeed = baseSpeed * speedMult;
+  const currentSpeed = Math.hypot(boss.vx, boss.vy);
+  if (currentSpeed > 0 && Math.abs(currentSpeed - targetSpeed) > 1) {
+    boss.vx = (boss.vx / currentSpeed) * targetSpeed;
+    boss.vy = (boss.vy / currentSpeed) * targetSpeed;
+  }
+
+  // Spawn flame trail particles when enraged
+  if ((boss.isEnraged || boss.isHyper) && Math.random() < (boss.isHyper ? 0.45 : 0.25)) {
+    defeatParticles.push({
+      x: boss.x + (Math.random() - 0.5) * boss.radius,
+      y: boss.y + (Math.random() - 0.5) * boss.radius,
+      vx: -boss.vx * 0.15 + (Math.random() - 0.5) * 20,
+      vy: -boss.vy * 0.15 + (Math.random() - 0.5) * 20,
+      color: boss.isHyper ? '#ef4444' : '#f97316',
+      size: Math.random() * 3 + 2,
+      alpha: 1,
+      life: 0.4
+    });
+  }
+
   if (boss.isCharging) {
     // Boss is stopped in place charging power!
     boss.chargeTimer -= dt;
@@ -871,20 +969,27 @@ function updateBoss(dt) {
 
 function startBossCharging() {
   boss.isCharging = true;
-  boss.chargeDuration = 1.1; // 1.1 seconds stop & charge
+  boss.chargeDuration = boss.isHyper ? 0.75 : (boss.isEnraged ? 0.9 : 1.1); // Faster charging in rage
   boss.chargeTimer = boss.chargeDuration;
-  spawnFloatingText('⚡ บอสกำลังรวมพลัง!', boss.x, boss.y - 28, '#f87171', 16);
+  const warnColor = boss.isHyper ? '#ef4444' : (boss.isEnraged ? '#f97316' : '#f87171');
+  const warnText = boss.isHyper ? '⚡ รวมพลังคลั่งขั้นสุด!' : (boss.isEnraged ? '🔥 รวมพลังคลั่ง!' : '⚡ บอสกำลังรวมพลัง!');
+  spawnFloatingText(warnText, boss.x, boss.y - 28, warnColor, 16);
 }
 
 function triggerBossBurst() {
   boss.isCharging = false;
-  bossBurstTimer = getRandomBurstInterval();
+  bossBurstTimer = getRandomBurstInterval(boss.isEnraged, boss.isHyper);
 
-  // Burst 8 minions radiating in all 8 directions
-  const burstCount = 8;
-  const burstSpeed = 75; // px/sec
+  const cs = levelConfig.cellSize;
+  const targetPlayerX = player.x * cs + cs / 2;
+  const targetPlayerY = player.y * cs + cs / 2;
+  const angleToPlayer = Math.atan2(targetPlayerY - boss.y, targetPlayerX - boss.x);
+
+  const burstCount = boss.isHyper ? 10 : (boss.isEnraged ? 9 : 8);
+  const burstSpeed = boss.isHyper ? 95 : (boss.isEnraged ? 85 : 75);
   const baseAngle = Math.random() * Math.PI * 2;
 
+  // 1. Radial dispersed minions
   for (let i = 0; i < burstCount; i++) {
     const angle = baseAngle + (Math.PI * 2 * i) / burstCount;
     burstMinions.push({
@@ -898,21 +1003,90 @@ function triggerBossBurst() {
     });
   }
 
+  // 2. Targeted Burst: 2 aimed directly at player or trail location
+  const targetedSpread = [-0.22, 0.22];
+  for (let j = 0; j < targetedSpread.length; j++) {
+    const targetedAngle = angleToPlayer + targetedSpread[j];
+    burstMinions.push({
+      id: Date.now() + 100 + j,
+      x: boss.x + Math.cos(targetedAngle) * (boss.radius + 4),
+      y: boss.y + Math.sin(targetedAngle) * (boss.radius + 4),
+      vx: Math.cos(targetedAngle) * (burstSpeed * 1.1),
+      vy: Math.sin(targetedAngle) * (burstSpeed * 1.1),
+      radius: 7,
+      alive: true,
+      isTargeted: true
+    });
+  }
+
   // Shockwave & fiery burst particles
-  spawnDefeatParticles(boss.x, boss.y, '#ef4444');
-  spawnFloatingText('💥 ระเบิดพลัง!', boss.x, boss.y - 26, '#f43f5e', 20);
+  const burstColor = boss.isHyper ? '#dc2626' : (boss.isEnraged ? '#f97316' : '#ef4444');
+  spawnDefeatParticles(boss.x, boss.y, burstColor);
+  spawnFloatingText('💥 ระเบิดพลัง!', boss.x, boss.y - 26, burstColor, 20);
 
   // Resume boss movement with new dynamic angle
   const resumeAngle = Math.random() * Math.PI * 2;
-  boss.vx = Math.cos(resumeAngle) * levelConfig.bossSpeed;
-  boss.vy = Math.sin(resumeAngle) * levelConfig.bossSpeed;
+  const targetSpeed = getBossBaseSpeed() * (boss.isHyper ? 1.45 : (boss.isEnraged ? 1.30 : 1.0));
+  boss.vx = Math.cos(resumeAngle) * targetSpeed;
+  boss.vy = Math.sin(resumeAngle) * targetSpeed;
 }
 
 function updateMinions(dt) {
+  const cs = levelConfig.cellSize;
+  const isPlayerDrawing = player.state === PlayerState.DRAWING;
+
   for (const minion of minions) {
-    if (minion.alive) {
-      updateBouncingEntity(minion, dt);
+    if (!minion.alive) continue;
+
+    // Hunter AI: When player is drawing, steer toward closest trail point or player
+    if (minion.isHunter && isPlayerDrawing) {
+      let targetX = player.x * cs + cs / 2;
+      let targetY = player.y * cs + cs / 2;
+      let minDistSq = (minion.x - targetX) ** 2 + (minion.y - targetY) ** 2;
+
+      // Check trail points to intercept player's path
+      for (let t = 0; t < trail.length; t += 2) {
+        const tx = trail[t].x * cs + cs / 2;
+        const ty = trail[t].y * cs + cs / 2;
+        const dSq = (minion.x - tx) ** 2 + (minion.y - ty) ** 2;
+        if (dSq < minDistSq) {
+          minDistSq = dSq;
+          targetX = tx;
+          targetY = ty;
+        }
+      }
+
+      const dx = targetX - minion.x;
+      const dy = targetY - minion.y;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist > 8) {
+        const desiredAngle = Math.atan2(dy, dx);
+        const currentAngle = Math.atan2(minion.vy, minion.vx);
+        let diff = desiredAngle - currentAngle;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+
+        const steerRate = 2.4; // Radians per second smooth turning
+        const newAngle = currentAngle + Math.sign(diff) * Math.min(Math.abs(diff), steerRate * dt);
+        const speed = minion.baseSpeed || getMinionBaseSpeed();
+        minion.vx = Math.cos(newAngle) * speed;
+        minion.vy = Math.sin(newAngle) * speed;
+      }
     }
+
+    // Minion speed scaling when boss is enraged
+    if (boss.isEnraged || boss.isHyper) {
+      const enrageBoost = boss.isHyper ? 1.25 : 1.15;
+      const curSpd = Math.hypot(minion.vx, minion.vy);
+      const targetSpd = (minion.baseSpeed || getMinionBaseSpeed()) * enrageBoost;
+      if (curSpd > 0 && Math.abs(curSpd - targetSpd) > 1) {
+        minion.vx = (minion.vx / curSpd) * targetSpd;
+        minion.vy = (minion.vy / curSpd) * targetSpd;
+      }
+    }
+
+    updateBouncingEntity(minion, dt);
   }
 }
 
@@ -1410,19 +1584,22 @@ function renderBoss(c) {
   if (boss.isCharging) {
     c.translate((Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4);
   }
-  // Menacing red fiery aura glow
-  c.shadowColor = '#ef4444';
-  c.shadowBlur = (boss.isCharging ? 28 : 16) + Math.sin(time * 1.5) * 4;
+  // Menacing fiery aura glow (Enraged: fiery orange, Hyper: searing crimson)
+  const auraColor = boss.isHyper ? '#dc2626' : (boss.isEnraged ? '#f97316' : '#ef4444');
+  const baseBlur = boss.isHyper ? 28 : (boss.isEnraged ? 22 : 16);
+  c.shadowColor = auraColor;
+  c.shadowBlur = (boss.isCharging ? baseBlur + 12 : baseBlur) + Math.sin(time * (boss.isHyper ? 3 : 1.5)) * 5;
 
   // 1. Spikes / Demonic horns radiating from perimeter
-  c.fillStyle = '#7f1d1d';
-  c.strokeStyle = '#ef4444';
-  c.lineWidth = 1.5;
+  c.fillStyle = boss.isHyper ? '#450a0a' : (boss.isEnraged ? '#7c2d12' : '#7f1d1d');
+  c.strokeStyle = auraColor;
+  c.lineWidth = boss.isHyper ? 2.0 : 1.5;
   const spikeCount = 8;
-  const rot = time * 0.4;
+  const rotSpeed = boss.isHyper ? 0.9 : (boss.isEnraged ? 0.65 : 0.4);
+  const rot = time * rotSpeed;
   for (let i = 0; i < spikeCount; i++) {
     const angle = rot + (i * Math.PI * 2) / spikeCount;
-    const spikeLen = r + 6 + Math.sin(time * 2 + i) * 2;
+    const spikeLen = r + (boss.isHyper ? 8 : 6) + Math.sin(time * 2 + i) * 2;
     const baseSpan = 0.28;
     const p1x = boss.x + Math.cos(angle - baseSpan) * (r * 0.85);
     const p1y = boss.y + Math.sin(angle - baseSpan) * (r * 0.85);
@@ -1445,17 +1622,29 @@ function renderBoss(c) {
     boss.x - r * 0.3, boss.y - r * 0.3, r * 0.1,
     boss.x, boss.y, r
   );
-  grad.addColorStop(0, '#f87171');
-  grad.addColorStop(0.35, '#dc2626');
-  grad.addColorStop(0.75, '#991b1b');
-  grad.addColorStop(1, '#450a0a');
+  if (boss.isHyper) {
+    grad.addColorStop(0, '#fca5a5');
+    grad.addColorStop(0.3, '#ef4444');
+    grad.addColorStop(0.7, '#991b1b');
+    grad.addColorStop(1, '#180303');
+  } else if (boss.isEnraged) {
+    grad.addColorStop(0, '#fed7aa');
+    grad.addColorStop(0.35, '#ea580c');
+    grad.addColorStop(0.75, '#9a3412');
+    grad.addColorStop(1, '#431407');
+  } else {
+    grad.addColorStop(0, '#f87171');
+    grad.addColorStop(0.35, '#dc2626');
+    grad.addColorStop(0.75, '#991b1b');
+    grad.addColorStop(1, '#450a0a');
+  }
 
   c.beginPath();
   c.arc(boss.x, boss.y, r, 0, Math.PI * 2);
   c.fillStyle = grad;
   c.fill();
   c.lineWidth = 2;
-  c.strokeStyle = '#fca5a5';
+  c.strokeStyle = boss.isHyper ? '#fee2e2' : (boss.isEnraged ? '#ffedd5' : '#fca5a5');
   c.stroke();
 
   // Reset shadow for inner facial features
@@ -1533,14 +1722,14 @@ function renderMinion(c, minion) {
   const r = minion.radius + pulse; // ~8px base radius
 
   c.save();
-  // Violet/purple glowing aura
-  c.shadowColor = '#c084fc';
-  c.shadowBlur = 10;
+  // Glowing aura: Hunter is fiery golden amber, normal is violet/purple
+  c.shadowColor = minion.isHunter ? '#f59e0b' : '#c084fc';
+  c.shadowBlur = minion.isHunter ? 14 : 10;
 
   // 1. Small flapping bat wings on left and right
   const wingFlap = Math.sin(time * 3 + minion.id * 2) * 0.45;
-  c.fillStyle = '#6b21a8';
-  c.strokeStyle = '#c084fc';
+  c.fillStyle = minion.isHunter ? '#78350f' : '#6b21a8';
+  c.strokeStyle = minion.isHunter ? '#fde047' : '#c084fc';
   c.lineWidth = 1.2;
 
   // Left Wing
@@ -1569,55 +1758,71 @@ function renderMinion(c, minion) {
   c.stroke();
   c.restore();
 
-  // 2. Body Gradient (Purple Imp)
+  // 2. Body Gradient (Hunter: Golden Fiery Imp, Normal: Purple Imp)
   const grad = c.createRadialGradient(
     minion.x - r * 0.3, minion.y - r * 0.3, 1,
     minion.x, minion.y, r
   );
-  grad.addColorStop(0, '#f0abfc');
-  grad.addColorStop(0.4, '#a855f7');
-  grad.addColorStop(0.85, '#6b21a8');
-  grad.addColorStop(1, '#3b0764');
+  if (minion.isHunter) {
+    grad.addColorStop(0, '#fef08a');
+    grad.addColorStop(0.35, '#f97316');
+    grad.addColorStop(0.75, '#b91c1c');
+    grad.addColorStop(1, '#450a0a');
+  } else {
+    grad.addColorStop(0, '#f0abfc');
+    grad.addColorStop(0.4, '#a855f7');
+    grad.addColorStop(0.85, '#6b21a8');
+    grad.addColorStop(1, '#3b0764');
+  }
 
   c.beginPath();
   c.arc(minion.x, minion.y, r, 0, Math.PI * 2);
   c.fillStyle = grad;
   c.fill();
-  c.lineWidth = 1.5;
-  c.strokeStyle = '#e879f9';
+  c.lineWidth = minion.isHunter ? 1.8 : 1.5;
+  c.strokeStyle = minion.isHunter ? '#fde047' : '#e879f9';
   c.stroke();
 
-  // 3. Small horns
-  c.fillStyle = '#e879f9';
+  // 3. Small horns (Golden for Hunter)
+  c.fillStyle = minion.isHunter ? '#fbbf24' : '#e879f9';
   c.beginPath();
   // Left horn
   c.moveTo(minion.x - r * 0.5, minion.y - r * 0.6);
-  c.lineTo(minion.x - r * 0.6, minion.y - r * 1.3);
+  c.lineTo(minion.x - r * (minion.isHunter ? 0.7 : 0.6), minion.y - r * (minion.isHunter ? 1.5 : 1.3));
   c.lineTo(minion.x - r * 0.2, minion.y - r * 0.8);
   // Right horn
   c.moveTo(minion.x + r * 0.2, minion.y - r * 0.8);
-  c.lineTo(minion.x + r * 0.6, minion.y - r * 1.3);
+  c.lineTo(minion.x + r * (minion.isHunter ? 0.7 : 0.6), minion.y - r * (minion.isHunter ? 1.5 : 1.3));
   c.lineTo(minion.x + r * 0.5, minion.y - r * 0.6);
   c.fill();
 
-  // 4. Glowing Red Slanted Eyes
+  // 4. Glowing Slanted Eyes
   c.shadowBlur = 0;
   const eyeOffset = r * 0.38;
   const eyeY = minion.y - r * 0.12;
   const eyeR = r * 0.22;
 
-  c.fillStyle = '#ef4444';
+  c.fillStyle = minion.isHunter ? '#ef4444' : '#ef4444';
   c.beginPath();
   c.arc(minion.x - eyeOffset, eyeY, eyeR, 0, Math.PI * 2);
   c.arc(minion.x + eyeOffset, eyeY, eyeR, 0, Math.PI * 2);
   c.fill();
 
   // Eye highlights
-  c.fillStyle = '#fef08a';
+  c.fillStyle = minion.isHunter ? '#ffffff' : '#fef08a';
   c.beginPath();
   c.arc(minion.x - eyeOffset, eyeY, eyeR * 0.4, 0, Math.PI * 2);
   c.arc(minion.x + eyeOffset, eyeY, eyeR * 0.4, 0, Math.PI * 2);
   c.fill();
+
+  // Hunter distinctive mark
+  if (minion.isHunter) {
+    c.fillStyle = '#fde047';
+    c.font = 'bold 9px sans-serif';
+    c.textAlign = 'center';
+    c.textBaseline = 'bottom';
+    c.fillText('✦', minion.x, minion.y - r - 4);
+  }
 
   c.restore();
 }
@@ -1629,14 +1834,14 @@ function renderBurstMinions(c) {
     if (!bm.alive) continue;
     const r = bm.radius;
 
-    // Fiery crimson glow aura
-    c.shadowColor = '#ef4444';
-    c.shadowBlur = 12;
+    // Fiery glow aura (targeted burst is intense orange-gold)
+    c.shadowColor = bm.isTargeted ? '#f59e0b' : '#ef4444';
+    c.shadowBlur = bm.isTargeted ? 18 : 12;
 
     // 1. Trailing fiery flame tail behind motion
     const angle = Math.atan2(bm.vy, bm.vx);
-    const tailLen = r * 2.0;
-    c.fillStyle = 'rgba(239, 68, 68, 0.45)';
+    const tailLen = r * (bm.isTargeted ? 3.2 : 2.0);
+    c.fillStyle = bm.isTargeted ? 'rgba(249, 115, 22, 0.7)' : 'rgba(239, 68, 68, 0.45)';
     c.beginPath();
     c.moveTo(bm.x + Math.cos(angle + Math.PI / 2) * (r * 0.65), bm.y + Math.sin(angle + Math.PI / 2) * (r * 0.65));
     c.lineTo(bm.x - Math.cos(angle) * tailLen, bm.y - Math.sin(angle) * tailLen);
@@ -1649,23 +1854,30 @@ function renderBurstMinions(c) {
       bm.x - r * 0.3, bm.y - r * 0.3, 1,
       bm.x, bm.y, r
     );
-    grad.addColorStop(0, '#fef08a'); // Bright yellow-white core
-    grad.addColorStop(0.35, '#f87171');
-    grad.addColorStop(0.8, '#dc2626');
-    grad.addColorStop(1, '#7f1d1d');
+    if (bm.isTargeted) {
+      grad.addColorStop(0, '#ffffff'); // Pure white-hot laser core
+      grad.addColorStop(0.3, '#fde047');
+      grad.addColorStop(0.7, '#ea580c');
+      grad.addColorStop(1, '#7c2d12');
+    } else {
+      grad.addColorStop(0, '#fef08a'); // Bright yellow-white core
+      grad.addColorStop(0.35, '#f87171');
+      grad.addColorStop(0.8, '#dc2626');
+      grad.addColorStop(1, '#7f1d1d');
+    }
 
     c.fillStyle = grad;
     c.beginPath();
     c.arc(bm.x, bm.y, r, 0, Math.PI * 2);
     c.fill();
     c.lineWidth = 1.2;
-    c.strokeStyle = '#fca5a5';
+    c.strokeStyle = bm.isTargeted ? '#fef08a' : '#fca5a5';
     c.stroke();
 
     // 3. Glowing fiery eye/center
     c.fillStyle = '#ffffff';
     c.beginPath();
-    c.arc(bm.x + Math.cos(angle) * (r * 0.25), bm.y + Math.sin(angle) * (r * 0.25), 1.5, 0, Math.PI * 2);
+    c.arc(bm.x + Math.cos(angle) * (r * 0.25), bm.y + Math.sin(angle) * (r * 0.25), 1.6, 0, Math.PI * 2);
     c.fill();
   }
   c.restore();
